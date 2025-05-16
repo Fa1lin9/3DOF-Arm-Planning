@@ -11,16 +11,18 @@ if __name__ == '__main__':
     arm = Basic3dofArm(link_lengths)
     robot = arm.robot
 
-    analyticalPlanner = (
-        AnalyticalPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose, n=50))
-    joint_angles_1 = analyticalPlanner.solution_without_collision()
-
-    optimalPlanner = OptimPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose )
-    joint_angles_2 = optimalPlanner.solution_without_collision()
-
-    samplingPlanner = SamplingPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose, )
-    # joint_angles_3 = samplingPlanner.solution_without_collision()
-    # print(joint_angles_3)
+    planner_flag = 3
+    if planner_flag == 1:
+        analyticalPlanner = (
+            AnalyticalPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose, n=50))
+        joint_angles = analyticalPlanner.solution_without_collision()
+    elif planner_flag == 2:
+        optimalPlanner = OptimPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose )
+        joint_angles = optimalPlanner.solution_without_collision()
+    elif planner_flag == 3:
+        samplingPlanner = SamplingPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose, )
+        joint_angles = samplingPlanner.solution_without_collision()
+        print(joint_angles)
 
     # 创建图形
     fig, ax = plt.subplots()
@@ -57,7 +59,7 @@ if __name__ == '__main__':
         return line
 
 
-    for q in joint_angles_2:
+    for q in joint_angles:
         update(q)
         plt.pause(0.05)
 

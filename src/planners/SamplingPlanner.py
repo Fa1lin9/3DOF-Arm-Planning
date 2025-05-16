@@ -4,6 +4,7 @@ from spatialmath import SE3
 from multiprocessing import Pool
 from multiprocessing.pool import ThreadPool
 
+
 class Node:
     def __init__(self, theta, parent=None, cost=0.0):
         self.theta = theta
@@ -77,13 +78,20 @@ class SamplingPlanner:
     # def samplingTheta(self):
     #     return np.array([np.random.uniform(low, high) for low, high in zip(self.robot.qlim[0], self.robot.qlim[1])])
     def samplingTheta(self):
-        if np.random.rand() < 0.2:  # 20% 概率采样目标点方向
-            return self.robot.ikine_LM(
-                SE3(float(self.candidatePoint[0]), float(self.candidatePoint[1]), 0),
-                mask=np.array([1, 1, 1, 0, 0, 0]),
-                seed=88
-            ).q
-        return np.array([np.random.uniform(low, high) for low, high in zip(self.robot.qlim[0], self.robot.qlim[1])])
+        try:
+            if np.random.rand() < 0.5:
+                q = self.robot.ikine_LM(
+                    SE3(float(self.candidatePoint[0]), float(self.candidatePoint[1]), 0),
+                    mask=np.array([1, 1, 1, 0, 0, 0]),
+                    seed=88
+                ).q
+                if q is not None and len(q) == self.dof and not np.any(np.isnan(q)):
+                    return q
+        except:
+            pass
+        # fallback 到均匀采样
+        low, high = self.robot.qlim
+        return np.array([np.random.uniform(l, h) for l, h in zip(low, high)])
 
     # AI修改的
     # def samplingTheta(self):
@@ -132,21 +140,34 @@ class SamplingPlanner:
         distPoint2Circle = abs(np.linalg.norm(nodePoint - self.center) - self.radius)
         distPoint2Candidate = abs(np.linalg.norm(nodePoint - self.candidatePoint))
 
+        print("The distPoint2Line : ", distPoint2Line)
+        print("The distPoint2Circle : ", distPoint2Circle)
+        print("The distPoint2Candidate : ", distPoint2Candidate)
+
         # 当前状态
         isOnCircle = self.isOnCircle(nodePoint)
         isOnLine = self.isOnLine(nodePoint)
 
         # 代价函数分为两阶段
         # 第一阶段为到达候选点
-        if isOnLine and isOnCircle:
+        print("State Flag : ", self.stateFlag)
+        if isOnCircle:
             self.stateFlag = True
 
         # 第一阶段 走直线
-        if self.stateFlag:
+        if not self.stateFlag:
+            print("Current State: On Line")
+            # 比例系数k
             k = 0.5
-            return k * distPoint2Line + (1 - k) * distPoint2Candidate
+            # 放大系数k_
+            k_ = 1
+            costOnLine = k_ * (k * distPoint2Line + (1 - k) * distPoint2Candidate)
+            print("The cost of the OnLine is: ", costOnLine)
+            print("\n")
+            return costOnLine
         # 第二阶段 走圆
         else:
+            print("Current State: On Circle")
             if not hasattr(self, 'startCirclePoint'):
                 self.startCirclePoint = nodePoint
                 return distPoint2Circle - self.radius
@@ -154,64 +175,47 @@ class SamplingPlanner:
             v2 = nodePoint - self.center
             cosAngle = np.dot(v1, v2) / np.linalg.norm(v1) / np.linalg.norm(v2)
 
-            # 更新参考点
             self.startCirclePoint = nodePoint
+            costOnCircle = (distPoint2Circle - self.radius) + (- cosAngle) * self.radius
+            print("The cost of the OnCircle is: ", costOnCircle)
+            print("\n")
             return (distPoint2Circle - self.radius) + (- cosAngle) * self.radius
 
-    # def solution_without_collision(self):
-    #     # 初始位置
-    #     startNode = Node(self.robot.ikine_LM(
-    #         SE3(float(self.init_pose[0]), float(self.init_pose[1]), 0),
-    #         mask=np.array([1, 1, 1, 0, 0, 0]),
-    #         seed=88
-    #     ).q)
-    #     nodes = [startNode]
-    #
-    #     maxIterations = 20
-    #     for _ in range(maxIterations):
-    #         sample = self.samplingTheta()
-    #         nearestNode = self.nearest(nodes, sample)
-    #         newPoint = self.steer(nearestNode.theta, sample)
-    #
-    #         # 获得新节点
-    #         newNode = Node(self.robot.ikine_LM(
-    #             SE3(float(newPoint[0]), float(newPoint[1]), 0),
-    #             q0=nearestNode.theta,
-    #             mask=np.array([1, 1, 1, 0, 0, 0]),
-    #             seed=88,
-    #             ilimit=50, slimit=100, tol=1e-3
-    #         ).q)
-    #         newNode.parent = nearestNode
-    #         newNode.cost = nearestNode.cost + self.costFunc(newNode)
-    #
-    #         neighbors = self.near(nodes, sample)
-    #         for neighbor in neighbors:
-    #             tempCost = neighbor.cost + self.costFunc(neighbor)
-    #             if tempCost < newNode.cost:
-    #                 newNode.parent = neighbor
-    #                 newNode.cost = tempCost
-    #
-    #         for neighbor in neighbors:
-    #             tempCost = newNode.cost + self.costFunc(newNode)
-    #             if tempCost < neighbor.cost:
-    #                 neighbor.parent = newNode
-    #                 neighbor.cost = tempCost
-    #
-    #         nodes.append(newNode)
-    #     goalPath = min(nodes, key=lambda node: node.cost) if nodes else None
-    #     if goalPath:
-    #         # 提取路径
-    #         path = []
-    #         node = goalPath
-    #         while node:
-    #             path.append(node.theta)
-    #             node = node.parent
-    #         return path
-
-    # AI修改的
     def parallel_sample(self, _):
         """用于并行化的采样函数"""
         return self.samplingTheta()
+
+    def edgeCost(self, node1, node2):
+        # 有先后顺序 从node1到node2
+        # 一般的RRT*的edgeCost都是两个点之间的距离
+        # 但是我们这里不可行 需要重新考虑
+        point1 = self.fkinematics(node1.theta)
+        point2 = self.fkinematics(node2.theta)
+
+        vec = point2 - point1
+        dist = np.linalg.norm(vec)
+        unit = vec / dist
+
+        if self.isOnCircle(point1):
+            self.stateFlag = True
+
+        # 走圆阶段
+        if self.stateFlag:
+            # 计算叉乘
+            # 作为沿圆的法线上运动的一个衡量
+            # 越接近1越好
+            vecPoint2Center = point1 - self.center
+            distPoint2Center = np.linalg.norm(vecPoint2Center)
+            unitPoint2Center = vecPoint2Center / distPoint2Center
+            cross_product = np.cross(unitPoint2Center, unit)
+            return cross_product
+        # 走直线阶段
+        else:
+            # 计算点积
+            # 作为和最短直线共线程度的一个衡量
+            # 越接近1越好
+            dot_product = np.dot(unit, self.vecInit2centerUnit)
+            return dot_product
 
     def solution_without_collision(self):
         # 初始位置
@@ -219,50 +223,113 @@ class SamplingPlanner:
             SE3(float(self.init_pose[0]), float(self.init_pose[1]), 0),
             mask=np.array([1, 1, 1, 0, 0, 0]),
             seed=88
-        ).q)
+        ).q, cost=0.0)
         nodes = [startNode]
-
-        maxIterations = 200
-        best_node = None
-        best_cost = float('inf')
-
-        # 创建进程池
+        goalCandidates = []
+        maxIterations = 10
         with ThreadPool() as pool:
             for _ in range(maxIterations):
-                samples = pool.map(self.parallel_sample, [None]*5)
-
+                print("The number of the iterations is ", _)
+                samples = pool.map(self.parallel_sample, [None] * 5)
                 for sample in samples:
+                    # sample = self.samplingTheta()
                     nearestNode = self.nearest(nodes, sample)
                     newPoint = self.steer(nearestNode.theta, sample)
 
                     # 获得新节点
-                    try:
-                        new_theta = self.robot.ikine_LM(
-                            SE3(float(newPoint[0]), float(newPoint[1]), 0),
-                            q0=nearestNode.theta,
-                            mask=np.array([1, 1, 1, 0, 0, 0]),
-                            seed=88,
-                            ilimit=50, slimit=100, tol=1e-3
-                        ).q
-                    except:
-                        continue  # 跳过逆运动学失败的情况
-
-                    newNode = Node(new_theta)
+                    newNode = Node(self.robot.ikine_LM(
+                        SE3(float(newPoint[0]), float(newPoint[1]), 0),
+                        q0=nearestNode.theta,
+                        mask=np.array([1, 1, 1, 0, 0, 0]),
+                        seed=88,
+                        ilimit=50, slimit=100, tol=1e-3
+                    ).q)
                     newNode.parent = nearestNode
-                    newNode.cost = nearestNode.cost + self.costFunc(newNode)
+                    newNode.cost = nearestNode.cost + self.edgeCost(nearestNode, newNode)
 
-                    # 简化邻居处理
+                    neighbors = self.near(nodes, newNode.theta)
+
+                    for neighbor in neighbors:
+                        tempCost = neighbor.cost + self.edgeCost(neighbor, newNode)
+                        if tempCost < newNode.cost:
+                            newNode.parent = neighbor
+                            newNode.cost = tempCost
+
+                    for neighbor in neighbors:
+                        tempCost = newNode.cost + self.edgeCost(newNode, neighbor)
+                        if tempCost < neighbor.cost:
+                            neighbor.parent = newNode
+                            neighbor.cost = tempCost
+
                     nodes.append(newNode)
 
-                    # 跟踪最佳节点
-                    if newNode.cost < best_cost:
-                        best_cost = newNode.cost
-                        best_node = newNode
+            if self.isOnCircle(self.fkinematics(newNode.theta)) or self.isOnLine(self.fkinematics(newNode.theta)):
+                goalCandidates.append(newNode)
+        goalPath = min(goalCandidates, key=lambda node: node.cost) if goalCandidates else None
+        if goalPath:
+            # 提取路径
+            path = []
+            node = goalPath
+            while node:
+                path.append(node.theta)
+                node = node.parent
+            return path[::-1]
 
-        # 提取路径
-        path = []
-        node = best_node if best_node else (nodes[-1] if nodes else None)
-        while node:
-            path.append(node.theta)
-            node = node.parent
-        return path[::-1]  # 反转路径从起点到终点
+    # def solution_without_collision(self):
+    #     # 初始位置
+    #     startNode = Node(self.robot.ikine_LM(
+    #         SE3(float(self.init_pose[0]), float(self.init_pose[1]), 0),
+    #         mask=np.array([1, 1, 1, 0, 0, 0]),
+    #         seed=88
+    #     ).q, cost=10)
+    #
+    #     nodes = [startNode]
+    #
+    #     maxIterations = 20
+    #     best_node = None
+    #     best_cost = -float('inf')
+    #
+    #     # 创建进程池
+    #     with ThreadPool() as pool:
+    #         for _ in range(maxIterations):
+    #             print("The number of the iterations is ", _)
+    #             samples = pool.map(self.parallel_sample, [None] * 5)
+    #
+    #             for sample in samples:
+    #                 nearestNode = self.nearest(nodes, sample)
+    #                 newPoint = self.steer(nearestNode.theta, sample)
+    #
+    #                 # 获得新节点
+    #                 try:
+    #                     new_theta = self.robot.ikine_LM(
+    #                         SE3(float(newPoint[0]), float(newPoint[1]), 0),
+    #                         q0=nearestNode.theta,
+    #                         mask=np.array([1, 1, 1, 0, 0, 0]),
+    #                         seed=88,
+    #                         ilimit=50, slimit=100, tol=1e-3
+    #                     ).q
+    #                 except:
+    #                     print("逆运动学解算失败")
+    #                     continue  # 跳过逆运动学失败的情况
+    #
+    #                 newNode = Node(new_theta)
+    #                 newNode.parent = nearestNode
+    #                 newNode.cost = nearestNode.cost + self.costFunc(newNode)
+    #
+    #                 # 简化邻居处理
+    #                 nodes.append(newNode)
+    #
+    #                 # if self.stateFlag:
+    #                 #     best_cost = float("inf")
+    #                 # 跟踪最佳节点
+    #                 if newNode.cost < best_cost:
+    #                     best_cost = newNode.cost
+    #                     best_node = newNode
+    #
+    #     # 提取路径
+    #     path = []
+    #     node = best_node if best_node else (nodes[-1] if nodes else None)
+    #     while node:
+    #         path.append(node.theta)
+    #         node = node.parent
+    #     return path[::-1]  # 反转路径从起点到终点
