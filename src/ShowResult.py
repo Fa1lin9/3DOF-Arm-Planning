@@ -4,14 +4,16 @@ from planners import *
 from BasicParam import *
 
 if __name__ == '__main__':
-    circle = Circle(center=(0, 0.5), radius=2)
-    init_pose = (0, 1)
+    # circle = Circle(center=(0, 0.5), radius=2)
+    # circle = Circle(center=(-1, 0.5), radius=1)
+    circle = Circle(center=(0.5, -0.5), radius=2)
+    init_pose = (1, 1)
     link_lengths = [1.0, 1.0, 1.0]
 
     arm = Basic3dofArm(link_lengths)
     robot = arm.robot
 
-    planner_flag = 3
+    planner_flag = 2
     if planner_flag == 1:
         analyticalPlanner = (
             AnalyticalPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose, n=50))
@@ -37,7 +39,6 @@ if __name__ == '__main__':
 
     # 初始化末端执行器轨迹
     end_effector_trajectory = []
-
 
     def update(q):
         # 正向运动学，计算机械臂各关节的位置

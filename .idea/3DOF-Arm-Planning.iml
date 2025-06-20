@@ -4,6 +4,12 @@
     <content url="file://$MODULE_DIR$" />
     <orderEntry type="jdk" jdkName="robotsim" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="Group Work" />
+    <orderEntry type="module" module-name="EazyRL" />
+    <orderEntry type="module" module-name="basic_reinforcement_learning-master" />
+    <orderEntry type="module" module-name="IR-Sim" />
+    <orderEntry type="module" module-name="LLM-TAMP" />
+    <orderEntry type="module" module-name="Python-100-Days" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="PLAIN" />

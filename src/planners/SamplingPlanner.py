@@ -199,6 +199,7 @@ class SamplingPlanner:
         if self.isOnCircle(point1):
             self.stateFlag = True
 
+        print(f"Current state flag: {self.stateFlag}")
         # 走圆阶段
         if self.stateFlag:
             # 计算叉乘
@@ -208,6 +209,7 @@ class SamplingPlanner:
             distPoint2Center = np.linalg.norm(vecPoint2Center)
             unitPoint2Center = vecPoint2Center / distPoint2Center
             cross_product = np.cross(unitPoint2Center, unit)
+            print("cross product: ", cross_product)
             return cross_product
         # 走直线阶段
         else:
@@ -215,65 +217,8 @@ class SamplingPlanner:
             # 作为和最短直线共线程度的一个衡量
             # 越接近1越好
             dot_product = np.dot(unit, self.vecInit2centerUnit)
+            print("dot product : ", dot_product)
             return dot_product
-
-    def solution_without_collision(self):
-        # 初始位置
-        startNode = Node(self.robot.ikine_LM(
-            SE3(float(self.init_pose[0]), float(self.init_pose[1]), 0),
-            mask=np.array([1, 1, 1, 0, 0, 0]),
-            seed=88
-        ).q, cost=0.0)
-        nodes = [startNode]
-        goalCandidates = []
-        maxIterations = 10
-        with ThreadPool() as pool:
-            for _ in range(maxIterations):
-                print("The number of the iterations is ", _)
-                samples = pool.map(self.parallel_sample, [None] * 5)
-                for sample in samples:
-                    # sample = self.samplingTheta()
-                    nearestNode = self.nearest(nodes, sample)
-                    newPoint = self.steer(nearestNode.theta, sample)
-
-                    # 获得新节点
-                    newNode = Node(self.robot.ikine_LM(
-                        SE3(float(newPoint[0]), float(newPoint[1]), 0),
-                        q0=nearestNode.theta,
-                        mask=np.array([1, 1, 1, 0, 0, 0]),
-                        seed=88,
-                        ilimit=50, slimit=100, tol=1e-3
-                    ).q)
-                    newNode.parent = nearestNode
-                    newNode.cost = nearestNode.cost + self.edgeCost(nearestNode, newNode)
-
-                    neighbors = self.near(nodes, newNode.theta)
-
-                    for neighbor in neighbors:
-                        tempCost = neighbor.cost + self.edgeCost(neighbor, newNode)
-                        if tempCost < newNode.cost:
-                            newNode.parent = neighbor
-                            newNode.cost = tempCost
-
-                    for neighbor in neighbors:
-                        tempCost = newNode.cost + self.edgeCost(newNode, neighbor)
-                        if tempCost < neighbor.cost:
-                            neighbor.parent = newNode
-                            neighbor.cost = tempCost
-
-                    nodes.append(newNode)
-
-            if self.isOnCircle(self.fkinematics(newNode.theta)) or self.isOnLine(self.fkinematics(newNode.theta)):
-                goalCandidates.append(newNode)
-        goalPath = min(goalCandidates, key=lambda node: node.cost) if goalCandidates else None
-        if goalPath:
-            # 提取路径
-            path = []
-            node = goalPath
-            while node:
-                path.append(node.theta)
-                node = node.parent
-            return path[::-1]
 
     # def solution_without_collision(self):
     #     # 初始位置
@@ -281,55 +226,114 @@ class SamplingPlanner:
     #         SE3(float(self.init_pose[0]), float(self.init_pose[1]), 0),
     #         mask=np.array([1, 1, 1, 0, 0, 0]),
     #         seed=88
-    #     ).q, cost=10)
-    #
+    #     ).q, cost=0.0)
     #     nodes = [startNode]
-    #
-    #     maxIterations = 20
-    #     best_node = None
-    #     best_cost = -float('inf')
-    #
-    #     # 创建进程池
+    #     goalCandidates = []
+    #     maxIterations = 10
     #     with ThreadPool() as pool:
     #         for _ in range(maxIterations):
     #             print("The number of the iterations is ", _)
     #             samples = pool.map(self.parallel_sample, [None] * 5)
-    #
     #             for sample in samples:
+    #                 # sample = self.samplingTheta()
     #                 nearestNode = self.nearest(nodes, sample)
     #                 newPoint = self.steer(nearestNode.theta, sample)
     #
     #                 # 获得新节点
-    #                 try:
-    #                     new_theta = self.robot.ikine_LM(
-    #                         SE3(float(newPoint[0]), float(newPoint[1]), 0),
-    #                         q0=nearestNode.theta,
-    #                         mask=np.array([1, 1, 1, 0, 0, 0]),
-    #                         seed=88,
-    #                         ilimit=50, slimit=100, tol=1e-3
-    #                     ).q
-    #                 except:
-    #                     print("逆运动学解算失败")
-    #                     continue  # 跳过逆运动学失败的情况
-    #
-    #                 newNode = Node(new_theta)
+    #                 newNode = Node(self.robot.ikine_LM(
+    #                     SE3(float(newPoint[0]), float(newPoint[1]), 0),
+    #                     q0=nearestNode.theta,
+    #                     mask=np.array([1, 1, 1, 0, 0, 0]),
+    #                     seed=88,
+    #                     ilimit=50, slimit=100, tol=1e-3
+    #                 ).q)
     #                 newNode.parent = nearestNode
-    #                 newNode.cost = nearestNode.cost + self.costFunc(newNode)
+    #                 newNode.cost = nearestNode.cost + self.edgeCost(nearestNode, newNode)
     #
-    #                 # 简化邻居处理
+    #                 neighbors = self.near(nodes, newNode.theta)
+    #
+    #                 for neighbor in neighbors:
+    #                     tempCost = neighbor.cost + self.edgeCost(neighbor, newNode)
+    #                     if tempCost < newNode.cost:
+    #                         newNode.parent = neighbor
+    #                         newNode.cost = tempCost
+    #
+    #                 for neighbor in neighbors:
+    #                     tempCost = newNode.cost + self.edgeCost(newNode, neighbor)
+    #                     if tempCost < neighbor.cost:
+    #                         neighbor.parent = newNode
+    #                         neighbor.cost = tempCost
+    #
     #                 nodes.append(newNode)
     #
-    #                 # if self.stateFlag:
-    #                 #     best_cost = float("inf")
-    #                 # 跟踪最佳节点
-    #                 if newNode.cost < best_cost:
-    #                     best_cost = newNode.cost
-    #                     best_node = newNode
-    #
-    #     # 提取路径
-    #     path = []
-    #     node = best_node if best_node else (nodes[-1] if nodes else None)
-    #     while node:
-    #         path.append(node.theta)
-    #         node = node.parent
-    #     return path[::-1]  # 反转路径从起点到终点
+    #         if self.isOnCircle(self.fkinematics(newNode.theta)) or self.isOnLine(self.fkinematics(newNode.theta)):
+    #             goalCandidates.append(newNode)
+    #     goalPath = min(goalCandidates, key=lambda node: node.cost) if goalCandidates else None
+    #     if goalPath:
+    #         # 提取路径
+    #         path = []
+    #         node = goalPath
+    #         while node:
+    #             path.append(node.theta)
+    #             node = node.parent
+    #         return path[::-1]
+
+    def solution_without_collision(self):
+        # 初始位置
+        startNode = Node(self.robot.ikine_LM(
+            SE3(float(self.init_pose[0]), float(self.init_pose[1]), 0),
+            mask=np.array([1, 1, 1, 0, 0, 0]),
+            seed=88
+        ).q, cost=0)
+
+        nodes = [startNode]
+        angles = []
+        maxIterations = 40
+        best_node = None
+        best_cost = float('inf')
+
+        # 创建进程池
+        with ThreadPool() as pool:
+            for _ in range(maxIterations):
+                print("The number of the iterations is ", _)
+                samples = pool.map(self.parallel_sample, [None] * 5)
+
+                for sample in samples:
+                    nearestNode = self.nearest(nodes, sample)
+                    newPoint = self.steer(nearestNode.theta, sample)
+
+                    # 获得新节点
+                    try:
+                        new_theta = self.robot.ikine_LM(
+                            SE3(float(newPoint[0]), float(newPoint[1]), 0),
+                            q0=nearestNode.theta,
+                            mask=np.array([1, 1, 1, 0, 0, 0]),
+                            seed=88,
+                            ilimit=50, slimit=100, tol=1e-3
+                        ).q
+                    except:
+                        print("逆运动学解算失败")
+                        continue  # 跳过逆运动学失败的情况
+
+                    newNode = Node(new_theta)
+                    newNode.parent = nearestNode
+                    newNode.cost = nearestNode.cost + self.edgeCost(nearestNode, newNode)
+
+                    # 简化邻居处理
+                    nodes.append(newNode)
+                    angles.append(newNode.theta)
+                    # if self.stateFlag:
+                    #     best_cost = float("inf")
+                    # 跟踪最佳节点
+                    if newNode.cost < best_cost:
+                        best_cost = newNode.cost
+                        best_node = newNode
+
+        # 提取路径
+        path = []
+        node = best_node if best_node else (nodes[-1] if nodes else None)
+        while node:
+            path.append(node.theta)
+            node = node.parent
+        return angles
+        # return path[::-1]  # 反转路径从起点到终点

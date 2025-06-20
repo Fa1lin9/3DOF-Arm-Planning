@@ -3,6 +3,12 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/3DOF-Arm-Planning.iml" filepath="$PROJECT_DIR$/.idea/3DOF-Arm-Planning.iml" />
+      <module fileurl="file://$USER_HOME$/Desktop/EazyRL/.idea/EazyRL.iml" filepath="$USER_HOME$/Desktop/EazyRL/.idea/EazyRL.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../_LessonLearning/数值分析/Group Work/.idea/Group Work.iml" filepath="$PROJECT_DIR$/../../_LessonLearning/数值分析/Group Work/.idea/Group Work.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../IR-Sim/.idea/IR-Sim.iml" filepath="$PROJECT_DIR$/../IR-Sim/.idea/IR-Sim.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../LLM-TAMP/.idea/LLM-TAMP.iml" filepath="$PROJECT_DIR$/../LLM-TAMP/.idea/LLM-TAMP.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../Python-100-Days/.idea/Python-100-Days.iml" filepath="$PROJECT_DIR$/../Python-100-Days/.idea/Python-100-Days.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../basic_reinforcement_learning-master/.idea/basic_reinforcement_learning-master.iml" filepath="$PROJECT_DIR$/../basic_reinforcement_learning-master/.idea/basic_reinforcement_learning-master.iml" />
     </modules>
   </component>
 </project>
