@@ -13,7 +13,7 @@ if __name__ == '__main__':
     arm = Basic3dofArm(link_lengths)
     robot = arm.robot
 
-    planner_flag = 2
+    planner_flag = 1
     if planner_flag == 1:
         analyticalPlanner = (
             AnalyticalPlanner(obj=robot, circle=circle, arm_initial_pose=init_pose, n=50))
